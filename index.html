@@ -1,88 +1,392 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>College Suggestion System</title>
-</head>
-<body style="font-family: sans-serif; margin: 40px;">
-<h2>College Suggestion System</h2>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI College Recommender</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#4f46e5',
+              'brand-secondary': '#7c3aed',
+            }
+          }
+        }
+      }
+    </script>
+    
+    <!-- React & Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-<form id="collegeForm">
-  <label>Stream / Subjects of interest:</label><br>
-  <input type="text" id="stream" required><br><br>
-
-  <label>Entrance exams (JEE, NEET, CUET, etc.):</label><br>
-  <input type="text" id="exam" required><br><br>
-
-  <label>Budget / Financial condition:</label><br>
-  <input type="text" id="budget" required><br><br>
-
-  <label>Preferred location:</label><br>
-  <input type="text" id="location" required><br><br>
-
-  <label>Career goals / preferred field:</label><br>
-  <input type="text" id="career" required><br><br>
-
-  <label>Co-curricular activities:</label><br>
-  <input type="text" id="activities"><br><br>
-
-  <label>Mode of study preference (Online / Offline / Hybrid):</label><br>
-  <input type="text" id="mode" required><br><br>
-
-  <button type="submit">Submit</button>
-</form>
-
-<hr>
-<h3>Suggested Colleges:</h3>
-<pre id="output" style="white-space: pre-wrap;"></pre>
-
-<script>
-const API_KEY = "AIzaSyBBtx9h-ROknfgpl4mCA1GH7yVAgyzDWvI"; // <-- replace with your key
-
-document.getElementById("collegeForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const output = document.getElementById("output");
-  output.textContent = "Processing your inputs...";
-
-  const data = {
-    stream: document.getElementById("stream").value,
-    exam: document.getElementById("exam").value,
-    budget: document.getElementById("budget").value,
-    location: document.getElementById("location").value,
-    career: document.getElementById("career").value,
-    activities: document.getElementById("activities").value,
-    mode: document.getElementById("mode").value
-  };
-
-  const prompt = `
-You are an expert academic advisor. Based on the following details, suggest 5 ideal colleges in India.
-Provide output in this exact format:
-1) College Name
-   - Rank: (1 to 5)
-   - Reason for suggestion: (one short paragraph)
-
-Details:
-${JSON.stringify(data, null, 2)}
-`;
-
-  try {
-    const response = await fetch("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" + API_KEY, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
-
-    const result = await response.json();
-    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || "No response.";
-    output.textContent = text.trim();
-  } catch (error) {
-    output.textContent = "Error: " + error;
+    <!-- Google GenAI SDK -->
+    <script type="module">
+      import { GoogleGenAI, Type } from 'https://esm.run/@google/genai';
+      window.GoogleGenAI = GoogleGenAI;
+      window.GenAIType = Type;
+    </script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0"
   }
-});
+}
 </script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+    <div id="root"></div>
+    
+    <script type="text/babel" data-presets="react">
+      // Destructure React hooks
+      const { useState, useCallback } = React;
+      
+      // Get GenAI from window object
+      const { GoogleGenAI, GenAIType: Type } = window;
 
+      // --- Icon Components ---
+      const SparklesIcon = (props) => (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
+          <path fillRule="evenodd" d="M9.315 7.584C12.195 3.883 16.695 1.5 21.75 1.5a.75.75 0 01.75.75c0 5.056-2.383 9.555-6.084 12.436A6.75 6.75 0 019.75 22.5a.75.75 0 01-.75-.75v-7.182zm0-4.75a.75.75 0 01.75-.75c.617 0 1.21.144 1.766.42a.75.75 0 01-.868 1.352 4.09 4.09 0 00-.9-.272.75.75 0 01-.75-.75zm-.53 4.966a.75.75 0 01.212.086 4.09 4.09 0 00.9.272.75.75 0 01.868-1.352 5.59 5.59 0 01-1.766-.42.75.75 0 01-.212 1.414zM2.25 10.5a.75.75 0 01.75-.75c2.302 0 4.45.858 6.02 2.275a.75.75 0 01-1.06 1.06A7.479 7.479 0 003 11.25a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+        </svg>
+      );
+      const BotIcon = (props) => (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 21v-1.5M15.75 3v1.5M12 4.5v-1.5m0 18v-1.5M15.75 21v-1.5m-7.5-6.75h.008v.008H8.25v-.008Zm4.5 0h.008v.008h-.008v-.008Zm4.5 0h.008v.008h-.008v-.008Zm-12-4.5h.008v.008H8.25v-.008Zm4.5 0h.008v.008h-.008v-.008Zm4.5 0h.008v.008h-.008v-.008Z" />
+        </svg>
+      );
+      const RankIcon = (props) => (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9a9.75 9.75 0 1 0 9 0Z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75h.008v.008H12v-.008Zm0-3.75h.008v.008H12v-.008Zm0-3.75h.008v.008H12V8.25Zm-1.5 3.75h.008v.008H10.5v-.008Zm-1.5 0h.008v.008H9v-.008Zm4.5 0h.008v.008h-.008v-.008Zm1.5 0h.008v.008h-.008v-.008Zm-7.5 3.75h.008v.008H9V15Zm3 0h.008v.008H12v-.008Zm3 0h.008v.008h-.008v-.008Zm1.5-12.75a.75.75 0 0 0-1.5 0v2.25a.75.75 0 0 0 1.5 0V3Z" />
+        </svg>
+      );
+      const ReasonIcon = (props) => (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+        </svg>
+      );
+      
+      // --- UI Components ---
+      const LoadingSpinner = () => (
+        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      );
+      
+      const InputField = ({ label, id, name, value, onChange, placeholder, type = 'text', required = false }) => {
+        return (
+          <div>
+            <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-2">
+              {label} {required && <span className="text-red-400">*</span>}
+            </label>
+            <input
+              type={type}
+              id={id}
+              name={name}
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              required={required}
+              className="w-full bg-gray-900/70 border border-gray-600 rounded-md shadow-sm px-4 py-2 text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out"
+            />
+          </div>
+        );
+      };
+
+      const SelectField = ({ label, id, name, value, onChange, children }) => {
+        return (
+          <div>
+            <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-2">
+              {label}
+            </label>
+            <select
+              id={id}
+              name={name}
+              value={value}
+              onChange={onChange}
+              className="w-full bg-gray-900/70 border border-gray-600 rounded-md shadow-sm px-4 py-2 text-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out"
+            >
+              {children}
+            </select>
+          </div>
+        );
+      };
+      
+      const CollegeCard = ({ college, index }) => {
+        return (
+          <div className="bg-gray-800/60 backdrop-blur-sm border border-gray-700 rounded-xl shadow-lg p-6 transform transition-all duration-500 hover:shadow-purple-500/10 hover:border-purple-600 animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+            <style>{`
+              @keyframes fade-in {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+              .animate-fade-in { animation: fade-in 0.5s ease-out forwards; opacity: 0; }
+            `}</style>
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 bg-indigo-500/20 text-indigo-400 rounded-full p-2 mr-4">
+                  <BotIcon className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-100">{college.name}</h3>
+            </div>
+            <div className="space-y-4 ml-2 pl-12 border-l-2 border-gray-700">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 text-purple-400 mt-1"><RankIcon className="w-5 h-5" /></div>
+                  <div className="ml-3">
+                      <p className="font-semibold text-gray-300">Rank</p>
+                      <p className="text-purple-400">{college.rank}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 text-green-400 mt-1"><ReasonIcon className="w-5 h-5"/></div>
+                  <div className="ml-3">
+                      <p className="font-semibold text-gray-300">Why it's a good fit</p>
+                      <p className="text-gray-400">{college.reason}</p>
+                  </div>
+                </div>
+            </div>
+          </div>
+        );
+      };
+
+      // --- Gemini Service ---
+      const getCollegeRecommendations = async (preferences, apiKey) => {
+        if (!apiKey || apiKey.trim() === 'AIzaSyBBtx9h-ROknfgpl4mCA1GH7yVAgyzDWvI') {
+          throw new Error("Google AI Studio API Key is required. Please provide a valid key.");
+        }
+        
+        try {
+          const prompt = `
+            Based on the following user preferences, suggest 5 suitable colleges in India. Provide the name, a recent rank (e.g., "NIRF Engineering 2023: #5"), and a brief, compelling reason for the recommendation tailored to the user's inputs.
+
+            User Preferences:
+            - Stream/Subjects of Interest: ${preferences.stream || 'Not specified'}
+            - Entrance Exams Taken/Attempting: ${preferences.exams || 'Not specified'}
+            - Budget/Financial Condition: ${preferences.budget || 'Not specified'}
+            - Preferred Location: ${preferences.location || 'Not specified'}
+            - Career Goals/Preferred Field: ${preferences.goals || 'Not specified'}
+            - Desired Co-curricular Activities: ${preferences.activities || 'Not specified'}
+            - Preferred Mode of Study: ${preferences.studyMode || 'Not specified'}
+
+            Return the response as a valid JSON object containing a "colleges" key, which is an array of 5 college objects.
+          `;
+          
+          const ai = new GoogleGenAI({ apiKey });
+
+          const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: prompt,
+              config: {
+                  responseMimeType: "application/json",
+                  responseSchema: {
+                      type: Type.OBJECT,
+                      properties: {
+                          colleges: {
+                              type: Type.ARRAY,
+                              description: "A list of 5 recommended colleges.",
+                              items: {
+                                  type: Type.OBJECT,
+                                  properties: {
+                                      name: { type: Type.STRING, description: "The full name of the college/university." },
+                                      rank: { type: Type.STRING, description: "A recent official rank, including the ranking body and year (e.g., 'NIRF 2023: #10')." },
+                                      reason: { type: Type.STRING, description: "A concise reason why this college is a good fit based on the user's preferences." }
+                                  },
+                                  required: ["name", "rank", "reason"]
+                              }
+                          }
+                      },
+                      required: ["colleges"]
+                  }
+              }
+          });
+
+          const jsonText = response.text.trim();
+          if (!jsonText) {
+            throw new Error("Received an empty response from the AI.");
+          }
+          const result = JSON.parse(jsontext);
+          return result.colleges || [];
+        } catch (error) {
+          console.error("Error getting college recommendations:", error);
+          if (error instanceof Error) {
+              throw new Error(`Failed to fetch recommendations from AI: ${error.message}`);
+          }
+          throw new Error("An unknown error occurred while fetching recommendations.");
+        }
+      };
+
+      // --- Main App Component ---
+      const App = () => {
+        const [apiKey, setApiKey] = useState('');
+        const [preferences, setPreferences] = useState({
+          stream: 'Engineering (Computer Science)',
+          exams: 'JEE Main, BITSAT',
+          budget: 'Moderate',
+          location: 'Any metro city in India',
+          goals: 'Software Development Engineer at a top tech company',
+          activities: 'Coding clubs, Hackathons',
+          studyMode: 'Offline / On-campus'
+        });
+        const [recommendations, setRecommendations] = useState([]);
+        const [isLoading, setIsLoading] = useState(false);
+        const [error, setError] = useState(null);
+
+        const handleChange = useCallback((e) => {
+          const { name, value } = e.target;
+          setPreferences(prev => ({ ...prev, [name]: value }));
+        }, []);
+        
+        const handleApiKeyChange = useCallback((e) => {
+            setApiKey(e.target.value);
+        }, []);
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+          setIsLoading(true);
+          setError(null);
+          setRecommendations([]);
+
+          try {
+            const result = await getCollegeRecommendations(preferences, apiKey);
+            setRecommendations(result);
+          } catch (err) {
+            setError(err.message || 'An unexpected error occurred.');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
+            <main className="container mx-auto px-4 py-8 md:py-12">
+              <header className="text-center mb-10 md:mb-16">
+                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-indigo-500 text-transparent bg-clip-text mb-2">
+                  AI College Recommender
+                </h1>
+                <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+                  Enter your Google AI Studio API key and your preferences to get personalized college suggestions.
+                </p>
+              </header>
+
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-gray-800/50 backdrop-blur-sm p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-700">
+                  <form onSubmit={handleSubmit}>
+                    <div className="mb-6">
+                      <InputField
+                          label="Google AI Studio API Key"
+                          id="apiKey"
+                          name="apiKey"
+                          type="password"
+                          value={apiKey}
+                          onChange={handleApiKeyChange}
+                          placeholder="Enter your API key here"
+                          required={true}
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <InputField
+                        label="Stream / Subjects of Interest"
+                        id="stream" name="stream" value={preferences.stream} onChange={handleChange}
+                        placeholder="e.g., Computer Science, Medicine"
+                      />
+                      <InputField
+                        label="Entrance Exams"
+                        id="exams" name="exams" value={preferences.exams} onChange={handleChange}
+                        placeholder="e.g., JEE, NEET, CUET"
+                      />
+                      <InputField
+                        label="Budget / Financial Condition"
+                        id="budget" name="budget" value={preferences.budget} onChange={handleChange}
+                        placeholder="e.g., Low, Moderate, High"
+                      />
+                      <InputField
+                        label="Preferred Location"
+                        id="location" name="location" value={preferences.location} onChange={handleChange}
+                        placeholder="e.g., Delhi, Bangalore, or 'Any'"
+                      />
+                      <InputField
+                        label="Career Goals / Preferred Field"
+                        id="goals" name="goals" value={preferences.goals} onChange={handleChange}
+                        placeholder="e.g., Data Scientist, Doctor"
+                      />
+                      <InputField
+                        label="Co-curricular Activities"
+                        id="activities" name="activities" value={preferences.activities} onChange={handleChange}
+                        placeholder="e.g., Sports, Debate, Music"
+                      />
+                      <div className="md:col-span-2">
+                        <SelectField
+                          label="Mode of Study Preference"
+                          id="studyMode" name="studyMode" value={preferences.studyMode} onChange={handleChange}
+                        >
+                          <option>Offline / On-campus</option>
+                          <option>Online</option>
+                          <option>Hybrid</option>
+                        </SelectField>
+                      </div>
+                    </div>
+                    <div className="mt-8 text-center">
+                      <button
+                        type="submit"
+                        disabled={isLoading || !apiKey}
+                        className="inline-flex items-center justify-center px-8 py-3 font-semibold text-white bg-gradient-to-r from-brand-primary to-brand-secondary rounded-lg shadow-lg hover:scale-105 transform transition-transform duration-300 focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
+                      >
+                        {isLoading ? (
+                          <>
+                            <LoadingSpinner />
+                            <span>Analyzing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <SparklesIcon className="w-5 h-5 mr-2" />
+                            Get Recommendations
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                
+                <div className="mt-12">
+                  {error && (
+                    <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg text-center">
+                      <p><strong>Oops! Something went wrong.</strong></p>
+                      <p>{error}</p>
+                    </div>
+                  )}
+
+                  {recommendations.length > 0 && (
+                    <div className="space-y-6">
+                      <h2 className="text-3xl font-bold text-center text-gray-200">Your Top 5 College Matches</h2>
+                      {recommendations.map((college, index) => (
+                         <CollegeCard key={index} college={college} index={index} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </main>
+          </div>
+        );
+      };
+      
+      // --- Render the App ---
+      const rootElement = document.getElementById('root');
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+    </script>
 </body>
 </html>
