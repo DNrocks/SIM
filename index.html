@@ -160,7 +160,7 @@
 
       // --- Gemini Service ---
       const getCollegeRecommendations = async (preferences, apiKey) => {
-        if (!apiKey || apiKey.trim() === 'AIzaSyBBtx9h-ROknfgpl4mCA1GH7yVAgyzDWvI') {
+        if (!apiKey || apiKey.trim() === '') {
           throw new Error("Google AI Studio API Key is required. Please provide a valid key.");
         }
         
